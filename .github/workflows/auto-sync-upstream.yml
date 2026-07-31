@@ -1,0 +1,76 @@
+name: Auto Sync upstream BentoPDF
+
+on:
+  schedule:
+    - cron: "0 0 * * 4" # Quarta-feira 21:00 BRT (00:00 UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout fork
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+
+      - name: Configure git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+      - name: Add upstream repository
+        run: |
+          git remote add upstream https://github.com/alam00000/bentopdf.git
+          git fetch upstream
+
+
+      - name: Check for updates
+        id: check
+        run: |
+          COUNT=$(git rev-list HEAD..upstream/main --count)
+
+          echo "commits=$COUNT" >> "$GITHUB_OUTPUT"
+
+          if [ "$COUNT" -gt 0 ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+
+      - name: Show upstream commits
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          echo "Novos commits encontrados:"
+          git log HEAD..upstream/main --oneline
+
+
+      - name: Merge upstream changes
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git merge upstream/main --no-edit
+
+
+      - name: Commit and push sync
+        if: steps.check.outputs.changed == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v6
+        with:
+          commit_message: "chore: sync upstream BentoPDF"
+          branch: main
+
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## BentoPDF Automatic upstream sync" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commits encontrados: ${{ steps.check.outputs.commits }}" >> "$GITHUB_STEP_SUMMARY"
